@@ -104,9 +104,15 @@ class SimBAAttack:
         shape: Tuple[int, ...],
         index: int
     ) -> torch.Tensor:
-        """Generate a DCT basis vector."""
-        # Simplified DCT basis generation
-        # In practice, you would use proper DCT basis functions
+        """
+        Generate a DCT basis vector.
+        
+        Note: This is a simplified placeholder implementation.
+        For full DCT-based attacks, use scipy.fftpack.dct or implement
+        proper 2D DCT basis functions.
+        """
+        # This is a placeholder - full DCT implementation would require
+        # proper frequency domain basis generation
         basis = torch.zeros(shape, device=self.device)
         basis.view(-1)[index] = 1
         return basis

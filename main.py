@@ -358,11 +358,14 @@ def main():
         
         if test_loader is None:
             print("Warning: No test data available. Creating dummy data for demonstration.")
-            # Create dummy data for demonstration
-            dummy_images = torch.rand(args.max_samples, 3, 224, 224).to(args.device)
-            dummy_labels = torch.randint(0, args.num_classes, (args.max_samples,)).to(args.device)
-            test_loader = [(dummy_images[i:i+1], dummy_labels[i:i+1]) 
-                          for i in range(args.max_samples)]
+            # Create dummy data for demonstration using a simple generator
+            def dummy_data_generator():
+                for i in range(args.max_samples):
+                    img = torch.rand(1, 3, 224, 224).to(args.device)
+                    label = torch.randint(0, args.num_classes, (1,)).to(args.device)
+                    yield (img, label)
+            
+            test_loader = list(dummy_data_generator())
         
         # Initialize attack
         attack = SimBAAttack(
@@ -405,8 +408,10 @@ def main():
                 device=args.device
             )
         elif args.defense == 'ensemble':
-            # For ensemble, create multiple instances of the same model
-            # In practice, you might want to use different models
+            # For ensemble, use multiple instances of the model
+            # Note: In practice, you should use different model variants or
+            # models trained with different initializations for better diversity
+            print("Note: For effective ensemble defense, use different model variants")
             models = [model for _ in range(3)]
             defense = EnsembleDefense(
                 models=models,

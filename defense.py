@@ -132,19 +132,18 @@ class InputTransformationDefense(AdversarialDefense):
         """
         Apply total variation denoising.
         
+        Note: This is a simplified implementation. For full TV denoising,
+        consider using optimization-based approaches or specialized libraries.
+        
         Args:
             x: Input tensor
-            weight: Weight for TV regularization
+            weight: Weight for TV regularization (not used in simplified version)
             
         Returns:
             Denoised tensor
         """
-        # Simplified TV denoising
-        # Calculate gradients
-        diff_i = x[:, :, 1:, :] - x[:, :, :-1, :]
-        diff_j = x[:, :, :, 1:] - x[:, :, :, :-1]
-        
-        # Minimize by clipping large gradients (simplified)
+        # Simplified TV denoising - just return clamped input
+        # Full implementation would iteratively minimize TV norm
         return torch.clamp(x, 0, 1)
     
     def transform(self, x: torch.Tensor) -> torch.Tensor:

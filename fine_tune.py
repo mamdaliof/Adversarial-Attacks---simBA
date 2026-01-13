@@ -59,7 +59,7 @@ class WarmupCosineScheduler:
                 self.total_epochs - self.warmup_epochs
             )
             lr = self.min_lr + (self.base_lr - self.min_lr) * 0.5 * (
-                1 + torch.cos(torch.tensor(progress * 3.14159265359))
+                1 + torch.cos(torch.tensor(progress * torch.pi))
             )
             lr = float(lr)
         

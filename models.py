@@ -162,7 +162,7 @@ def create_convnext_model(
         ConvNext model (wrapped or unwrapped)
     """
     loader = ConvNextModelLoader()
-    model = loader.load_model(model_name, pretrained, num_classes, device)
+    model = ConvNextModelLoader.load_model(model_name, pretrained, num_classes, device)
     
     if wrap_model:
         model = ModelWrapper(model)
