@@ -13,7 +13,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from torch.cuda.amp import autocast, GradScaler
+from torch import amp
 from typing import Optional, Dict, Callable
 import os
 import time
@@ -143,7 +143,8 @@ class ModelTrainer:
         self.model = model.to(device)
         self.device = device
         self.use_mixed_precision = use_mixed_precision and device == 'cuda'
-        self.scaler = GradScaler() if self.use_mixed_precision else None
+        # Use torch.amp.GradScaler and pass device string (e.g., "cuda") per new API
+        self.scaler = amp.GradScaler(self.device) if self.use_mixed_precision else None
         self.history = {'train_loss': [], 'train_acc': [], 'val_loss': [], 'val_acc': []}
     
     def train_epoch(
@@ -177,7 +178,8 @@ class ModelTrainer:
             optimizer.zero_grad()
             
             if self.use_mixed_precision:
-                with autocast():
+                # Use torch.amp.autocast with the device string (e.g., "cuda")
+                with amp.autocast(self.device):
                     outputs = self.model(inputs)
                     loss = criterion(outputs, targets)
                 

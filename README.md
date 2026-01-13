@@ -1,275 +1,173 @@
 # Adversarial Attacks on ConvNext Models using SimBA
 
-This project implements adversarial attacks (specifically SimBA - Simple Black-box Adversarial attacks) on ConvNext models, along with various defense mechanisms.
+A complete pipeline for running **SimBA** (Simple Black-box Adversarial) attacks on ConvNext models, with optional fine-tuning and multiple defense mechanisms.
 
-## 📋 Overview
+---
 
-This repository provides a complete pipeline for:
-- Loading and using ConvNext models (Tiny, Small, Base, Large)
-- Fine-tuning models with warm-up schedulers and advanced training features
-- Performing SimBA adversarial attacks (black-box attacks requiring only model predictions)
-- Implementing defense mechanisms against adversarial attacks
-- Evaluating attack success rates and defense effectiveness
+## Table of Contents
 
-## 🏗️ Project Structure
+- [Adversarial Attacks on ConvNext Models using SimBA](#adversarial-attacks-on-convnext-models-using-simba)
+  - [Table of Contents](#table-of-contents)
+  - [Overview](#overview)
+  - [Project Structure](#project-structure)
+  - [Installation](#installation)
+  - [Quick Start](#quick-start)
+  - [CLI Arguments](#cli-arguments)
+  - [Modules](#modules)
+    - [models.py](#modelspy)
+    - [fine\_tune.py](#fine_tunepy)
+    - [simba\_attack.py](#simba_attackpy)
+    - [defense.py](#defensepy)
+  - [Notes](#notes)
+  - [References](#references)
+  - [License](#license)
+
+---
+
+## Overview
+
+- Load pretrained ConvNext models (Tiny / Small / Base / Large)
+- Fine-tune with warm-up + cosine-annealing scheduler
+- Run query-efficient SimBA attacks (untargeted or targeted)
+- Apply defenses: input transformations, ensemble voting, adversarial detection
+- Evaluate and save results
+
+---
+
+## Project Structure
 
 ```
-.
-├── models.py           # ConvNext model definitions and loading utilities
-├── fine_tune.py        # Fine-tuning with warm-up scheduler and training utilities
-├── simba_attack.py     # SimBA adversarial attack implementation
-├── defense.py          # Defense mechanisms (input transformations, ensemble, detection)
-├── main.py             # Main orchestration script
-├── requirements.txt    # Python dependencies
-└── README.md          # This file
+models.py          # Model loading utilities and ModelWrapper
+fine_tune.py       # Trainer with warm-up scheduler, early stopping, mixed precision
+simba_attack.py    # SimBA attack implementation
+defense.py         # Defense mechanisms
+main.py            # CLI entry point (orchestrates the full pipeline)
+requirements.txt   # Dependencies
+README.md          # This file
 ```
 
-## 🚀 Getting Started
+---
 
-### Prerequisites
+## Installation
 
-- Python 3.8 or higher
-- CUDA-capable GPU (recommended for faster execution)
-
-### Installation
-
-1. Clone the repository:
 ```bash
 git clone https://github.com/mamdaliof/Adversarial-Attacks---simBA.git
 cd Adversarial-Attacks---simBA
-```
-
-2. Install dependencies:
-```bash
 pip install -r requirements.txt
 ```
 
-## 📖 Usage
+Requires **Python 3.8+** and a CUDA GPU (recommended).
 
-### Basic Usage
+---
 
-Run the complete pipeline with default settings:
-```bash
-python main.py --model convnext_tiny --dataset cifar10 --attack --defense input_transform
-```
-
-### Advanced Options
-
-#### 1. Model Selection
-Choose from different ConvNext variants:
-```bash
-python main.py --model convnext_small  # Options: convnext_tiny, convnext_small, convnext_base, convnext_large
-```
-
-#### 2. Fine-tuning
-Fine-tune the model before attacking:
-```bash
-python main.py --fine-tune --epochs 20 --learning-rate 1e-4 --warmup-epochs 5
-```
-
-#### 3. Attack Configuration
-Configure SimBA attack parameters:
-```bash
-python main.py --attack --epsilon 0.2 --max-iterations 10000 --max-samples 100
-```
-
-For targeted attacks:
-```bash
-python main.py --attack --targeted --epsilon 0.2
-```
-
-#### 4. Defense Mechanisms
-Choose from different defense strategies:
-```bash
-# Input transformation defense
-python main.py --defense input_transform
-
-# Ensemble defense
-python main.py --defense ensemble
-
-# Adversarial detector
-python main.py --defense detector
-
-# No defense
-python main.py --defense none
-```
-
-### Complete Example
+## Quick Start
 
 ```bash
-python main.py \
-    --model convnext_tiny \
-    --dataset cifar10 \
-    --data-path ./data \
-    --fine-tune \
-    --epochs 10 \
-    --learning-rate 1e-4 \
-    --warmup-epochs 2 \
-    --attack \
-    --epsilon 0.2 \
-    --max-iterations 5000 \
-    --max-samples 50 \
-    --defense input_transform \
-    --output-dir ./results \
-    --device cuda
+# Basic attack on CIFAR-10 with input-transform defense
+python main.py --dataset cifar10 --attack --defense input_transform
+
+# Fine-tune then attack
+python main.py --dataset cifar10 --fine-tune --epochs 10 --attack
+
+# Targeted attack with custom epsilon
+python main.py --dataset cifar10 --attack --targeted --epsilon 0.1
 ```
 
-## 📚 Module Details
+---
 
-### 1. `models.py`
-- **ConvNextModelLoader**: Load pre-trained ConvNext models
-- **ModelWrapper**: Wrapper for handling preprocessing and normalization
-- **create_convnext_model()**: Convenience function to create models
+## CLI Arguments
 
-Example:
+Run `python main.py --help` for the latest flags.
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--model` | `convnext_tiny` | Model variant (`convnext_tiny`, `small`, `base`, `large`) |
+| `--pretrained` | `True` | Use ImageNet-pretrained weights |
+| `--num-classes` | `1000` | Number of output classes |
+| `--data-path` | `./data` | Dataset root directory |
+| `--dataset` | `imagenet` | Dataset (`imagenet`, `cifar10`, `cifar100`, `custom`) |
+| `--batch-size` | `32` | Batch size |
+| `--num-workers` | `4` | DataLoader workers |
+| `--fine-tune` | `False` | Fine-tune before attack |
+| `--epochs` | `10` | Fine-tuning epochs |
+| `--learning-rate` | `1e-4` | Learning rate |
+| `--warmup-epochs` | `2` | Warm-up epochs |
+| `--attack` | `True` | Run SimBA attack |
+| `--epsilon` | `0.2` | Max perturbation magnitude |
+| `--max-iterations` | `10000` | Max attack iterations |
+| `--targeted` | `False` | Targeted attack |
+| `--max-samples` | `100` | Samples to attack |
+| `--defense` | `input_transform` | Defense: `input_transform`, `ensemble`, `detector`, `none` |
+| `--device` | auto | `cuda` if available, else `cpu` |
+| `--seed` | `42` | Random seed |
+| `--output-dir` | `./results` | Output directory |
+| `--checkpoint-path` | `None` | Path to model checkpoint |
+
+---
+
+## Modules
+
+### models.py
+
 ```python
 from models import create_convnext_model
 
-model = create_convnext_model(
-    model_name='convnext_tiny',
-    pretrained=True,
-    num_classes=1000
-)
+model = create_convnext_model('convnext_tiny', pretrained=True, num_classes=1000)
 ```
 
-### 2. `fine_tune.py`
-- **WarmupCosineScheduler**: Learning rate scheduler with warm-up and cosine annealing
-- **EarlyStopping**: Early stopping based on validation loss
-- **ModelTrainer**: Complete training pipeline with mixed precision support
+`ModelWrapper` expects **externally normalized** inputs (use torchvision weights' transforms).
 
-Features:
-- Learning rate warm-up
-- Cosine annealing scheduler
-- Early stopping
-- Model checkpointing
-- Mixed precision training (automatic on CUDA)
+### fine_tune.py
 
-Example:
 ```python
 from fine_tune import ModelTrainer
 
 trainer = ModelTrainer(model, device='cuda')
-history = trainer.fit(
-    train_loader=train_loader,
-    val_loader=val_loader,
-    epochs=50,
-    learning_rate=1e-4,
-    warmup_epochs=5
-)
+history = trainer.fit(train_loader, val_loader, epochs=50, warmup_epochs=5)
 ```
 
-### 3. `simba_attack.py`
-- **SimBAAttack**: Implementation of Simple Black-box Adversarial attack
+Features: warm-up scheduler, cosine annealing, early stopping, mixed precision, checkpointing.
 
-Features:
-- Untargeted and targeted attacks
-- Pixel-wise and frequency domain attacks
-- Query-efficient black-box attack
-- Attack success rate evaluation
+### simba_attack.py
 
-Example:
 ```python
 from simba_attack import SimBAAttack
 
-attack = SimBAAttack(
-    model=model,
-    epsilon=0.2,
-    max_iterations=10000,
-    targeted=False
-)
-
+attack = SimBAAttack(model, epsilon=0.2, max_iterations=10000, targeted=False)
 x_adv, success, queries, perturbation = attack.attack(x, y_true)
 ```
 
-### 4. `defense.py`
-- **InputTransformationDefense**: Defense using input transformations
-  - JPEG compression
-  - Bit depth reduction
-  - Gaussian blur
-  - Total variation denoising
+### defense.py
 
-- **EnsembleDefense**: Ensemble of multiple models
-  - Soft voting (probability averaging)
-  - Hard voting (majority voting)
-
-- **AdversarialDetector**: Detect adversarial examples
-  - Confidence-based detection
-  - Reconstruction-based detection
-
-- **AdversarialTrainingDefense**: Train with adversarial examples
-
-Example:
 ```python
 from defense import InputTransformationDefense
 
-defense = InputTransformationDefense(
-    model=model,
-    transforms_list=['jpeg_compression', 'gaussian_blur']
-)
-
-predictions, probabilities = defense.predict(x)
+defense = InputTransformationDefense(model, transforms_list=['jpeg_compression', 'gaussian_blur'])
+preds, probs = defense.predict(x)
 ```
 
-### 5. `main.py`
-Orchestrates the complete pipeline:
-1. Load ConvNext model
-2. Fine-tune (optional)
-3. Perform SimBA attack
-4. Apply defense mechanisms
-5. Evaluate and save results
+Available defenses:
+- **InputTransformationDefense** — JPEG compression, bit-depth reduction, Gaussian blur
+- **EnsembleDefense** — soft/hard voting across models
+- **AdversarialDetector** — confidence or reconstruction-based detection
 
-## 🔬 SimBA Attack
+---
 
-SimBA (Simple Black-box Adversarial) is an efficient black-box attack that:
-- Requires only model predictions (no gradients)
-- Uses random direction search
-- Modifies pixels iteratively to fool the classifier
-- Is query-efficient compared to other black-box methods
+## Notes
 
-**Reference**: "Simple Black-box Adversarial Attacks" (Guo et al., 2019)
+1. **Input normalization**: `ModelWrapper` does *not* normalize inputs internally. Preprocess images (including normalization) before passing them to the model, e.g., via the torchvision weights' transforms.
+2. **ImageNet**: `get_data_loader` returns `None` for ImageNet; provide your own loader or use CIFAR for quick tests.
+3. **Ensemble diversity**: The default ensemble duplicates the same model — for real defense, use distinct checkpoints or model variants.
 
-## 🛡️ Defense Mechanisms
+---
 
-### Input Transformation
-Applies transformations to remove adversarial perturbations:
-- JPEG compression
-- Bit depth reduction
-- Gaussian blur
-- Total variation minimization
+## References
 
-### Ensemble Defense
-Uses multiple models to make robust predictions through voting.
+- Guo, C., et al. *Simple Black-box Adversarial Attacks*, ICML 2019.
+- Liu, Z., et al. *A ConvNet for the 2020s*, CVPR 2022.
 
-### Adversarial Detection
-Identifies adversarial examples based on:
-- Prediction confidence
-- Reconstruction error
+---
 
-### Adversarial Training
-Trains the model on both clean and adversarial examples.
+## License
 
-## 📊 Results
-
-Results are saved in the output directory (default: `./results/`) with:
-- `config.json`: Configuration used
-- `attack_results.json`: Attack success rate and statistics
-- `training_history.json`: Training metrics (if fine-tuning was performed)
-- `checkpoints/`: Model checkpoints
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## 📄 License
-
-This project is open source and available under the MIT License.
-
-## 🙏 Acknowledgments
-
-- ConvNext models from torchvision
-- SimBA attack based on "Simple Black-box Adversarial Attacks" by Guo et al.
-- PyTorch framework
-
-## 📧 Contact
-
-For questions or issues, please open an issue on GitHub.
+MIT

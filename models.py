@@ -88,48 +88,48 @@ class ConvNextModelLoader:
 class ModelWrapper(nn.Module):
     """
     Wrapper class for models to facilitate adversarial attacks.
-    Handles preprocessing and normalization.
+    Note: this wrapper does not perform input normalization; inputs are
+    expected to be preprocessed (including normalization) externally.
     """
     
     def __init__(
         self,
         model: nn.Module,
-        mean: Tuple[float, float, float] = (0.485, 0.456, 0.406),
-        std: Tuple[float, float, float] = (0.229, 0.224, 0.225)
     ):
         """
         Initialize ModelWrapper.
+
+        Note: This wrapper no longer performs input normalization. Inputs are
+        expected to be preprocessed (including normalization) externally, e.g.
+        using the torchvision weights' transforms.
         
         Args:
             model: Base model to wrap
-            mean: Mean values for normalization (ImageNet default)
-            std: Standard deviation values for normalization (ImageNet default)
         """
         super(ModelWrapper, self).__init__()
         self.model = model
-        self.register_buffer('mean', torch.tensor(mean).view(1, 3, 1, 1))
-        self.register_buffer('std', torch.tensor(std).view(1, 3, 1, 1))
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Forward pass with normalization.
+        Forward pass.
+
+        Note: Input is expected to be preprocessed and normalized to the model's
+        required distribution (e.g., ImageNet mean/std) before calling this.
         
         Args:
-            x: Input tensor (assumed to be in [0, 1] range)
+            x: Input tensor (preprocessed and normalized)
             
         Returns:
             Model output
         """
-        # Normalize input
-        x_normalized = (x - self.mean) / self.std
-        return self.model(x_normalized)
+        return self.model(x)
     
     def predict(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Make predictions with the model.
-        
+
         Args:
-            x: Input tensor
+            x: Input tensor (preprocessed and normalized)
             
         Returns:
             Tuple of (predicted class indices, prediction probabilities)
@@ -150,6 +150,10 @@ def create_convnext_model(
 ) -> nn.Module:
     """
     Convenience function to create a ConvNext model.
+
+    Note: If `wrap_model` is True, the returned `ModelWrapper` does not perform
+    input normalization; inputs must be preprocessed (including normalization)
+    externally, for example using the torchvision weights' transforms.
     
     Args:
         model_name: Name of the ConvNext model variant
@@ -184,8 +188,13 @@ if __name__ == "__main__":
     print(f"Trainable Parameters: {info['trainable_parameters']:,}")
     print(f"Model Type: {info['model_type']}")
     
-    # Test forward pass
+    # Test forward pass (simulate external preprocessing/normalization)
     dummy_input = torch.rand(1, 3, 224, 224)
+    # Apply ImageNet normalization that torchvision transforms would provide
+    mean = torch.tensor((0.485, 0.456, 0.406)).view(1, 3, 1, 1)
+    std = torch.tensor((0.229, 0.224, 0.225)).view(1, 3, 1, 1)
+    dummy_input = (dummy_input - mean) / std
+
     if torch.cuda.is_available():
         dummy_input = dummy_input.cuda()
     
