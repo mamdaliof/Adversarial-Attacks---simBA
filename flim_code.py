@@ -34,7 +34,6 @@ def collate_fn(original_list):
 
 eval_dataloader = DataLoader(prepared_ds, batch_size=32, collate_fn=collate_fn)
 
-# 6. Evaluation Loop
 correct = 0
 total = 0
 
