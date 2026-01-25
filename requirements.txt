@@ -16,3 +16,6 @@ scipy>=1.10.0
 
 # For saving and loading
 h5py>=3.8.0
+
+transformers>=4.57.6
+datasets>=4.5.0

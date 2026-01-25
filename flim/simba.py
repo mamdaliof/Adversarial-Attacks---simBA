@@ -15,7 +15,7 @@ class SimBA:
     def expand_vector(self, x, size):
         batch_size = x.size(0)
         x = x.view(-1, 3, size, size)
-        z = torch.zeros(batch_size, 3, self.image_size, self.image_size)
+        z = torch.zeros(batch_size, 3, self.image_size, self.image_size).to(self.device)
         z[:, :, :size, :size] = x
         return z
         
@@ -25,14 +25,14 @@ class SimBA:
     def get_probs(self, x, y):
         x = x.to(self.device)
         with torch.no_grad():
-            output = self.model(pixel_values=x).logits.cpu()
+            output = self.model(pixel_values=x).logits
         probs = torch.index_select(F.softmax(output, dim=-1).data, 1, y)
         return torch.diag(probs)
     
     def get_preds(self, x):
         x = x.to(self.device)
         with torch.no_grad():
-            output = self.model(pixel_values=x).logits.cpu()
+            output = self.model(pixel_values=x).logits
         _, preds = output.data.max(1)
         return preds
 

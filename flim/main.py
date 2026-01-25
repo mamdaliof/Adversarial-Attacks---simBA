@@ -6,7 +6,8 @@ from tqdm import tqdm
 import matplotlib as plt
 from simba import SimBA
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cpu")
 
 #Load the Model & Processor
 checkpoint = "facebook/convnextv2-tiny-1k-224"
@@ -42,33 +43,69 @@ print(f"Label: {sample['labels']}")
 #############################
 simba_attack = SimBA(model=model, dataset=prepared_ds, image_size=224)
 
-total_images = 10
-correct_after_attack = 0
+# total_images = 10
+# correct_after_attack = 0
 
-print(f"Starting SimBA attack on {total_images} images...")
+# print(f"Starting SimBA attack on {total_images} images...")
 
-#The Attack Loop, iterate manually through the dataset to handle single images
-for i in tqdm(range(total_images)):
-    sample = prepared_ds[i]
+# #The Attack Loop, iterate manually through the dataset to handle single images
+# for i in tqdm(range(total_images)):
+#     sample = prepared_ds[i]
     
-    image = sample['pixel_values'].to(device)  # Shape: [3, 224, 224]
-    label = torch.tensor([sample['labels']]).to(device)
+#     image = sample['pixel_values'].to(device)  # Shape: [3, 224, 224]
+#     label = torch.tensor([sample['labels']]).to(device)
     
-    with torch.no_grad():
-        clean_pred = simba_attack.get_preds(image.unsqueeze(0))
+#     with torch.no_grad():
+#         clean_pred = simba_attack.get_preds(image.unsqueeze(0))
     
-    if clean_pred != label:
-        continue
+#     if clean_pred != label:
+#         continue
         
-    adv_image = simba_attack.simba_single(image, label, num_iters=1000, epsilon=0.2)
+#     adv_image = simba_attack.simba_single(image, label, num_iters=1000, epsilon=0.2)
     
-    with torch.no_grad():
-        final_pred = simba_attack.get_preds(adv_image.unsqueeze(0))
+#     with torch.no_grad():
+#         final_pred = simba_attack.get_preds(adv_image.unsqueeze(0))
         
-    if final_pred == label:
-        correct_after_attack += 1
+#     if final_pred == label:
+#         correct_after_attack += 1
 
-adv_accuracy = (correct_after_attack / total_images) * 100
-print(f"\n--- Attack Results ---")
-print(f"Adversarial Accuracy: {adv_accuracy:.2f}%")
-print(f"Attack Success Rate: {100 - adv_accuracy:.2f}%")
+# adv_accuracy = (correct_after_attack / total_images) * 100
+# print(f"\n--- Attack Results ---")
+# print(f"Adversarial Accuracy: {adv_accuracy:.2f}%")
+# print(f"Attack Success Rate: {100 - adv_accuracy:.2f}%")
+
+###################################
+#### Running DCT Batch Attack  ####
+###################################
+data_iter = iter(dataloader)
+batch = next(data_iter)
+
+images = batch['pixel_values'].to(device)
+labels = batch['labels'].to(device)
+
+# max_iters: how many frequency components to try
+# freq_dims: the size of the 2D low-freq block (like 28x28)
+# epsilon: the step size
+max_iters = 1000 
+freq_dims = 28 
+
+print(f"Starting SimBA DCT attack on batch of {images.size(0)} images...")
+
+adv_images, probs, succs, queries, l2_norms, linf_norms = simba_attack.simba_batch(
+    images, 
+    labels, 
+    max_iters=max_iters, 
+    freq_dims=freq_dims, 
+    stride=7, 
+    epsilon=0.2, 
+    order='rand', 
+    pixel_attack=False,
+    log_every=10
+)
+
+final_preds = simba_attack.get_preds(adv_images)
+success_rate = (final_preds != labels).float().mean() * 100
+
+print(f"\n--- DCT Attack Results ---")
+print(f"Attack Success Rate: {success_rate:.2f}%")
+print(f"Average Queries: {queries.sum(1).mean():.2f}")
