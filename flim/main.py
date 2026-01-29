@@ -39,7 +39,7 @@ log_file = os.path.join(output_dir, "attack_log.csv")
 
 with open(log_file, mode='w', newline='') as f:
     writer = csv.writer(f)
-    writer.writerow(["img_idx", "true_label", "final_pred", "success", "queries", "l2_norm", "init_p"])
+    writer.writerow(["img_idx", "true_label", "final_pred", "success", "queries", "l2_norm", "init_p", "final_p"])
 
 #############################
 #### Initializing Attack ####
@@ -99,7 +99,7 @@ for batch in tqdm(dataloader):
         images, 
         labels, 
         max_iters=5000, 
-        freq_dims=28, 
+        freq_dims=64, 
         stride=7, 
         epsilon=0.2, 
         order='rand', 
@@ -108,18 +108,28 @@ for batch in tqdm(dataloader):
     )
     
     # Store results
-    final_preds = simba_attack.get_preds(adv_images)
+    with torch.no_grad():
+        final_preds = simba_attack.get_preds(adv_images)
+        final_probs = simba_attack.get_probs(adv_images, labels).cpu().numpy()
+
     with open(log_file, mode='a', newline='') as f:
         writer = csv.writer(f)
         for i in range(images.size(0)):
-            is_success = (final_preds[i] != labels[i]).item()
-            q_count = queries[i].sum().item()
-            # We take the L2 norm from the last recorded iteration for that image
-            l2 = l2_norms[i, -1].item()
-            init_p = initial_probs[i]
+
+            l2 = torch.norm(adv_images[i] - images[i]).item()
+            total_q = queries[i].sum().item()
+            is_success = (final_preds[i].item() != labels[i].item())
             
-            writer.writerow([img_counter, labels[i].item(), final_preds[i].item(), is_success, q_count, l2, init_p])
-            all_successes.append(is_success)
+            writer.writerow([
+                img_counter, 
+                labels[i].item(), 
+                final_preds[i].item(), 
+                is_success, 
+                total_q, 
+                l2,
+                initial_probs[i],
+                final_probs[i]
+            ])
             img_counter += 1
 
 # Final Summary
