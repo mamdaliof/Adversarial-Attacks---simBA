@@ -5,18 +5,20 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 import matplotlib as plt
 from simba import SimBA
+import csv
+import os
 
 # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 device = torch.device("cpu")
 
 #Load the Model & Processor
 checkpoint = "facebook/convnextv2-tiny-1k-224"
-image_processor = AutoImageProcessor.from_pretrained(checkpoint)
+image_processor = AutoImageProcessor.from_pretrained(checkpoint, do_normalize=False)
 model = AutoModelForImageClassification.from_pretrained(checkpoint).to(device)
 model.eval()
 
 # load dataset
-dataset = load_dataset("mrm8488/ImageNet1K-val", split="train")
+dataset = load_dataset("mrm8488/ImageNet1K-val", split="train[0:64]")
 
 #Preprocessing Function
 def transforms(examples):
@@ -28,15 +30,16 @@ def transforms(examples):
 prepared_ds = dataset.with_transform(transforms)
 
 # Now we have prepared_ds, this is the dataset ready to use a SimBA attack on.
-dataloader = DataLoader(prepared_ds, batch_size=64, shuffle=True)
+dataloader = DataLoader(prepared_ds, batch_size=16, shuffle=False)
 
-# Check a single image
-sample = prepared_ds[1000]
-print("--- Dataset Item Check ---")
-print(f"Keys available: {sample.keys()}")
-print(f"Pixel values shape: {sample['pixel_values'].shape}")
-print(f"Label: {sample['labels']}")
+# Logging
+output_dir = "simba_results"
+os.makedirs(output_dir, exist_ok=True)
+log_file = os.path.join(output_dir, "attack_log.csv")
 
+with open(log_file, mode='w', newline='') as f:
+    writer = csv.writer(f)
+    writer.writerow(["img_idx", "true_label", "final_pred", "success", "queries", "l2_norm", "init_p"])
 
 #############################
 #### Initializing Attack ####
@@ -77,35 +80,50 @@ simba_attack = SimBA(model=model, dataset=prepared_ds, image_size=224)
 ###################################
 #### Running DCT Batch Attack  ####
 ###################################
-data_iter = iter(dataloader)
-batch = next(data_iter)
+# Create lists to store results
+img_counter = 0
+all_successes = []
 
-images = batch['pixel_values'].to(device)
-labels = batch['labels'].to(device)
+print(f"Starting SimBA DCT attack on {len(prepared_ds)} images...")
 
-# max_iters: how many frequency components to try
-# freq_dims: the size of the 2D low-freq block (like 28x28)
-# epsilon: the step size
-max_iters = 1000 
-freq_dims = 28 
+for batch in tqdm(dataloader):
+    images = batch['pixel_values'].to(device)
+    labels = batch['labels'].to(device)
 
-print(f"Starting SimBA DCT attack on batch of {images.size(0)} images...")
+    with torch.no_grad():
+        # This returns a tensor of probabilities for the correct class
+        initial_probs = simba_attack.get_probs(images, labels).cpu().numpy()
 
-adv_images, probs, succs, queries, l2_norms, linf_norms = simba_attack.simba_batch(
-    images, 
-    labels, 
-    max_iters=max_iters, 
-    freq_dims=freq_dims, 
-    stride=7, 
-    epsilon=0.2, 
-    order='rand', 
-    pixel_attack=False,
-    log_every=10
-)
+    # Run the batch attack
+    adv_images, probs, succs, queries, l2_norms, linf_norms = simba_attack.simba_batch(
+        images, 
+        labels, 
+        max_iters=5000, 
+        freq_dims=28, 
+        stride=7, 
+        epsilon=0.2, 
+        order='rand', 
+        pixel_attack=False,
+        log_every=10
+    )
+    
+    # Store results
+    final_preds = simba_attack.get_preds(adv_images)
+    with open(log_file, mode='a', newline='') as f:
+        writer = csv.writer(f)
+        for i in range(images.size(0)):
+            is_success = (final_preds[i] != labels[i]).item()
+            q_count = queries[i].sum().item()
+            # We take the L2 norm from the last recorded iteration for that image
+            l2 = l2_norms[i, -1].item()
+            init_p = initial_probs[i]
+            
+            writer.writerow([img_counter, labels[i].item(), final_preds[i].item(), is_success, q_count, l2, init_p])
+            all_successes.append(is_success)
+            img_counter += 1
 
-final_preds = simba_attack.get_preds(adv_images)
-success_rate = (final_preds != labels).float().mean() * 100
-
-print(f"\n--- DCT Attack Results ---")
-print(f"Attack Success Rate: {success_rate:.2f}%")
-print(f"Average Queries: {queries.sum(1).mean():.2f}")
+# Final Summary
+asr = (sum(all_successes) / len(all_successes)) * 100
+print(f"\n--- Done! ---")
+print(f"Final ASR: {asr:.2f}%")
+print(f"Logs saved to: {log_file}")

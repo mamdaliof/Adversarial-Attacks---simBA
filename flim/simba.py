@@ -19,20 +19,22 @@ class SimBA:
         z[:, :, :size, :size] = x
         return z
         
-    # def normalize(self, x):
-    #     return utils.apply_normalization(x, self.dataset)
+    def normalize(self, x):
+        return utils.apply_normalization(x, 'imagenet')
 
     def get_probs(self, x, y):
         x = x.to(self.device)
+        x_norm = self.normalize(x) 
         with torch.no_grad():
-            output = self.model(pixel_values=x).logits
+            output = self.model(pixel_values=x_norm).logits
         probs = torch.index_select(F.softmax(output, dim=-1).data, 1, y)
         return torch.diag(probs)
     
     def get_preds(self, x):
         x = x.to(self.device)
+        x_norm = self.normalize(x)
         with torch.no_grad():
-            output = self.model(pixel_values=x).logits
+            output = self.model(pixel_values=x_norm).logits
         _, preds = output.data.max(1)
         return preds
 
