@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-import utils
+import src.utils as utils
 
 
 class SimBA:
