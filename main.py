@@ -9,8 +9,8 @@ from src.defense_hidde import PreprocessingDefense
 import csv
 import os
 
-# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-device = torch.device("cpu")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# device = torch.device("cpu")
 
 #Load the Model & Processor
 checkpoint = "facebook/convnextv2-tiny-1k-224"
@@ -19,7 +19,7 @@ model = AutoModelForImageClassification.from_pretrained(checkpoint).to(device)
 model.eval()
 
 # load dataset
-dataset = load_dataset("mrm8488/ImageNet1K-val", split="train[16:64]")
+dataset = load_dataset("mrm8488/ImageNet1K-val", split="train[64:128]")
 
 #Preprocessing Function
 def transforms(examples):
@@ -31,7 +31,7 @@ def transforms(examples):
 prepared_ds = dataset.with_transform(transforms)
 
 # Now we have prepared_ds, this is the dataset ready to use a SimBA attack on.
-dataloader = DataLoader(prepared_ds, batch_size=16, shuffle=False)
+dataloader = DataLoader(prepared_ds, batch_size=32, shuffle=False)
 
 # Logging
 output_dir = "simba_results"
@@ -44,47 +44,13 @@ with open(log_file, mode='a', newline='') as f:
     if not file_exists:
             writer.writerow(["img_idx", "true_label", "final_pred", "success", "queries", "l2_norm", "init_p", "final_p"])
 
-#############################
-#### Initializing Attack ####
-#############################
 simba_attack = SimBA(model=model, dataset=prepared_ds, image_size=224)
-
-# total_images = 10
-# correct_after_attack = 0
-
-# print(f"Starting SimBA attack on {total_images} images...")
-
-# #The Attack Loop, iterate manually through the dataset to handle single images
-# for i in tqdm(range(total_images)):
-#     sample = prepared_ds[i]
-    
-#     image = sample['pixel_values'].to(device)  # Shape: [3, 224, 224]
-#     label = torch.tensor([sample['labels']]).to(device)
-    
-#     with torch.no_grad():
-#         clean_pred = simba_attack.get_preds(image.unsqueeze(0))
-    
-#     if clean_pred != label:
-#         continue
-        
-#     adv_image = simba_attack.simba_single(image, label, num_iters=1000, epsilon=0.2)
-    
-#     with torch.no_grad():
-#         final_pred = simba_attack.get_preds(adv_image.unsqueeze(0))
-        
-#     if final_pred == label:
-#         correct_after_attack += 1
-
-# adv_accuracy = (correct_after_attack / total_images) * 100
-# print(f"\n--- Attack Results ---")
-# print(f"Adversarial Accuracy: {adv_accuracy:.2f}%")
-# print(f"Attack Success Rate: {100 - adv_accuracy:.2f}%")
 
 ###################################
 #### Running DCT Batch Attack  ####
 ###################################
 # Create lists to store results
-img_counter = 16
+img_counter = 64
 all_successes = []
 
 print(f"Starting SimBA DCT attack on {len(prepared_ds)} images...")
@@ -119,9 +85,9 @@ for batch in tqdm(dataloader):
         writer = csv.writer(f)
         for i in range(images.size(0)):
 
-            l2 = torch.norm(adv_images[i] - images[i]).item()
-            total_q = queries[i].sum().item()
-            is_success = (final_preds[i].item() != labels[i].item())
+            l2 = torch.norm(adv_images[i] - images[i]).cpu().item()
+            total_q = queries[i].sum().cpu().item()
+            is_success = (final_preds[i].cpu().item() != labels[i].cpu().item())
             
             writer.writerow([
                 img_counter, 
@@ -135,15 +101,5 @@ for batch in tqdm(dataloader):
             ])
             img_counter += 1
 
-print(f"\n[Step 4] Applying {args.defense} defense...")
-defense = InputTransformationDefense(
-    model=model,
-    transforms_list=['jpeg_compression', 'bit_depth_reduction', 'gaussian_blur'],
-    device=args.device
-)
-
 # Final Summary
-asr = (sum(all_successes) / len(all_successes)) * 100
 print(f"\n--- Done! ---")
-print(f"Final ASR: {asr:.2f}%")
-print(f"Logs saved to: {log_file}")

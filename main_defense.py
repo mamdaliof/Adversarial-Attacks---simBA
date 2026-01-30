@@ -19,7 +19,7 @@ model = AutoModelForImageClassification.from_pretrained(checkpoint).to(device)
 model.eval()
 
 # load dataset
-dataset = load_dataset("mrm8488/ImageNet1K-val", split="train[0:64]")
+dataset = load_dataset("mrm8488/ImageNet1K-val", split="train[64:128]")
 
 #Preprocessing Function
 def transforms(examples):
@@ -36,7 +36,7 @@ dataloader = DataLoader(prepared_ds, batch_size=32, shuffle=False)
 # Logging
 output_dir = "simba_results"
 os.makedirs(output_dir, exist_ok=True)
-log_file = os.path.join(output_dir, "attack_defended_log.csv")
+log_file = os.path.join(output_dir, "attack_defended_log_64.csv")
 
 file_exists = os.path.isfile(log_file)
 with open(log_file, mode='a', newline='') as f:
@@ -56,7 +56,7 @@ defended_model = PreprocessingDefense(
 simba_attack = SimBA(model=defended_model, dataset=prepared_ds, image_size=224)
 
 # Create lists to store results
-img_counter = 0
+img_counter = 64
 all_successes = []
 
 print(f"Starting SimBA DCT attack on {len(prepared_ds)} images...")
@@ -91,9 +91,9 @@ for batch in tqdm(dataloader):
         writer = csv.writer(f)
         for i in range(images.size(0)):
 
-            l2 = torch.norm(adv_images[i] - images[i]).item()
-            total_q = queries[i].sum().item()
-            is_success = (final_preds[i].item() != labels[i].item())
+            l2 = torch.norm(adv_images[i] - images[i]).cpu().item()
+            total_q = queries[i].sum().cpu().item()
+            is_success = (final_preds[i].cpu().item() != labels[i].cpu().item())
             
             writer.writerow([
                 img_counter, 
@@ -108,7 +108,4 @@ for batch in tqdm(dataloader):
             img_counter += 1
 
 # Final Summary
-asr = (sum(all_successes) / len(all_successes)) * 100
 print(f"\n--- Done! ---")
-print(f"Final ASR: {asr:.2f}%")
-print(f"Logs saved to: {log_file}")

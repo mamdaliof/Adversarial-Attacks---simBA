@@ -1,17 +1,10 @@
-# defense_hidde.py
 import torch
 import torch.nn as nn
 import torchvision.transforms.functional as TF
 import random
 from types import SimpleNamespace
 
-
 class PreprocessingDefense(nn.Module):
-    """
-    Resize → Random Gaussian Blur → Logit Averaging
-    Works on batches: (B, 3, 224, 224)
-    """
-
     def __init__(
         self,
         model,
@@ -34,39 +27,27 @@ class PreprocessingDefense(nn.Module):
     @torch.no_grad()
     def preprocess_batch(self, x: torch.Tensor) -> torch.Tensor:
         """
-        x: (B, 3, H, W)
+        Preprocess entire batch (B, 3, 224, 224) at once.
         """
-        processed = []
+        img = TF.resize(x, [self.resize_inner, self.resize_inner])
+        img = TF.resize(img, [224, 224])
 
-        for img in x:
-            # resize down → up
-            img = TF.resize(img, self.resize_inner)
-            img = TF.resize(img, 224)
-
-            # randomized Gaussian blur
-            sigma = random.uniform(self.sigma_min, self.sigma_max)
-            img = TF.gaussian_blur(
-                img,
-                kernel_size=self.blur_kernel,
-                sigma=sigma,
-            )
-            processed.append(img)
-
-        return torch.stack(processed).to(self.device)
+        sigma = random.uniform(self.sigma_min, self.sigma_max)
+        img = TF.gaussian_blur(img, kernel_size=self.blur_kernel, sigma=sigma)
+        
+        return img.to(self.device)
 
     @torch.no_grad()
     def forward(self, pixel_values: torch.Tensor = None, **kwargs) -> torch.Tensor:
-        """
-        Modified to handle Hugging Face objects and extract raw logits
-        """
-        x = pixel_values 
-        logits_list = []
+        x = pixel_values.to(self.device)
+        batch_size = x.shape[0]
+        
+        # Duplicate the batch num_samples times
+        x_expanded = x.repeat_interleave(self.num_samples, dim=0)
+        x_p = self.preprocess_batch(x_expanded)
+        out = self.model(pixel_values=x_p) 
+        
+        logits = out.logits.view(batch_size, self.num_samples, -1)
+        avg_logits = torch.mean(logits, dim=1)
 
-        for _ in range(self.num_samples):
-            x_p = self.preprocess_batch(x)
-            out = self.model(pixel_values=x_p) 
-            
-            logits_list.append(out.logits)
-
-        avg_logits = torch.mean(torch.stack(logits_list), dim=0)
         return SimpleNamespace(logits=avg_logits)

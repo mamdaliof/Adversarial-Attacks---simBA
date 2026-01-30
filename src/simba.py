@@ -81,20 +81,20 @@ class SimBA:
         else:
             expand_dims = image_size
         n_dims = 3 * expand_dims * expand_dims
-        x = torch.zeros(batch_size, n_dims)
+        x = torch.zeros(batch_size, n_dims).to(self.device)
         # logging tensors
-        probs = torch.zeros(batch_size, max_iters)
-        succs = torch.zeros(batch_size, max_iters)
-        queries = torch.zeros(batch_size, max_iters)
-        l2_norms = torch.zeros(batch_size, max_iters)
-        linf_norms = torch.zeros(batch_size, max_iters)
-        prev_probs = self.get_probs(images_batch, labels_batch)
-        preds = self.get_preds(images_batch)
+        probs = torch.zeros(batch_size, max_iters).to(self.device)
+        succs = torch.zeros(batch_size, max_iters).to(self.device)
+        queries = torch.zeros(batch_size, max_iters).to(self.device)
+        l2_norms = torch.zeros(batch_size, max_iters).to(self.device)
+        linf_norms = torch.zeros(batch_size, max_iters).to(self.device)
+        prev_probs = self.get_probs(images_batch, labels_batch).to(self.device)
+        preds = self.get_preds(images_batch).to(self.device)
         if pixel_attack:
             trans = lambda z: z
         else:
             trans = lambda z: utils.block_idct(z, block_size=image_size, linf_bound=linf_bound)
-        remaining_indices = torch.arange(0, batch_size).long()
+        remaining_indices = torch.arange(0, batch_size, device=self.device).long()
         for k in range(max_iters):
             dim = indices[k]
             expanded = (images_batch[remaining_indices] + trans(self.expand_vector(x[remaining_indices], expand_dims))).clamp(0, 1)
@@ -115,17 +115,17 @@ class SimBA:
                 succs[:, k:] = torch.ones(batch_size, max_iters - k)
                 queries[:, k:] = torch.zeros(batch_size, max_iters - k)
                 break
-            remaining_indices = torch.arange(0, batch_size)[remaining].long()
+            remaining_indices = torch.arange(0, batch_size, device=self.device)[remaining].long()
             if k > 0:
                 succs[:, k] = ~remaining
-            diff = torch.zeros(remaining.sum(), n_dims)
+            diff = torch.zeros(remaining.sum(), n_dims).to(self.device)
             diff[:, dim] = epsilon
             left_vec = x[remaining_indices] - diff
             right_vec = x[remaining_indices] + diff
             # trying negative direction
             adv = (images_batch[remaining_indices] + trans(self.expand_vector(left_vec, expand_dims))).clamp(0, 1)
             left_probs = self.get_probs(adv, labels_batch[remaining_indices])
-            queries_k = torch.zeros(batch_size)
+            queries_k = torch.zeros(batch_size).to(self.device)
             # increase query count for all images
             queries_k[remaining_indices] += 1
             if targeted:
