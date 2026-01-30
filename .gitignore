@@ -216,4 +216,4 @@ checkpoints/
 *.png
 *.jpg
 *.jpeg
-outputs/
+simba_results/
