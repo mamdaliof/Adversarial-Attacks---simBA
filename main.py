@@ -4,7 +4,7 @@ from datasets import load_dataset
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import matplotlib as plt
-from simba import SimBA
+from src.simba import SimBA
 import csv
 import os
 
@@ -83,7 +83,7 @@ simba_attack = SimBA(model=model, dataset=prepared_ds, image_size=224)
 #### Running DCT Batch Attack  ####
 ###################################
 # Create lists to store results
-img_counter = 0
+img_counter = 16
 all_successes = []
 
 print(f"Starting SimBA DCT attack on {len(prepared_ds)} images...")
