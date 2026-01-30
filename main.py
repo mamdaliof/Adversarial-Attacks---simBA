@@ -5,6 +5,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 import matplotlib as plt
 from src.simba import SimBA
+from src.defense_hidde import PreprocessingDefense
 import csv
 import os
 
@@ -133,6 +134,13 @@ for batch in tqdm(dataloader):
                 final_probs[i]
             ])
             img_counter += 1
+
+print(f"\n[Step 4] Applying {args.defense} defense...")
+defense = InputTransformationDefense(
+    model=model,
+    transforms_list=['jpeg_compression', 'bit_depth_reduction', 'gaussian_blur'],
+    device=args.device
+)
 
 # Final Summary
 asr = (sum(all_successes) / len(all_successes)) * 100

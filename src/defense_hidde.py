@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torchvision.transforms.functional as TF
 import random
+from types import SimpleNamespace
 
 
 class PreprocessingDefense(nn.Module):
@@ -54,14 +55,18 @@ class PreprocessingDefense(nn.Module):
         return torch.stack(processed).to(self.device)
 
     @torch.no_grad()
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, pixel_values: torch.Tensor = None, **kwargs) -> torch.Tensor:
         """
-        Logit averaging over multiple randomized preprocessings
+        Modified to handle Hugging Face objects and extract raw logits
         """
-        logits = []
+        x = pixel_values 
+        logits_list = []
 
         for _ in range(self.num_samples):
             x_p = self.preprocess_batch(x)
-            logits.append(self.model(x_p))
+            out = self.model(pixel_values=x_p) 
+            
+            logits_list.append(out.logits)
 
-        return torch.mean(torch.stack(logits), dim=0)
+        avg_logits = torch.mean(torch.stack(logits_list), dim=0)
+        return SimpleNamespace(logits=avg_logits)
